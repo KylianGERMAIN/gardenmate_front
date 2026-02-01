@@ -1,0 +1,79 @@
+.plants {
+  width: 100%;
+}
+
+.plants h1 {
+  margin-bottom: 2rem;
+  color: #2d5016;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.2rem;
+}
+
+.error {
+  color: #c33;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.plants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.plant-card {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.plant-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.plant-card h3 {
+  margin: 0 0 1rem 0;
+  color: #2d5016;
+  font-size: 1.3rem;
+}
+
+.plant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.add-to-garden-button {
+  background-color: #2d5016;
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+  margin-top: auto;
+}
+
+.add-to-garden-button:hover {
+  background-color: #3d7026;
+}
