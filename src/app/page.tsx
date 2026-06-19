@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, type CareStatus } from "@/components/status-badge";
 import { ThirstGauge } from "@/components/thirst-gauge";
@@ -130,6 +135,23 @@ function GroupHead({ title, count }: { title: string; count: string }) {
 }
 
 export default function Home() {
+  const { user, ready, logout } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (ready && !user) router.replace("/login");
+  }, [ready, user, router]);
+
+  if (!user) return null;
+
+  const name = user.email.split("@")[0];
+  const initials = user.email.slice(0, 2).toUpperCase();
+
+  async function onLogout() {
+    await logout();
+    router.replace("/login");
+  }
+
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-border bg-background/70 backdrop-blur">
@@ -145,8 +167,13 @@ export default function Home() {
             <span>Catalogue</span>
             <span>Rappels</span>
           </nav>
-          <div className="grid size-9 place-items-center rounded-full border border-border bg-secondary text-[13px] font-semibold text-secondary-foreground">
-            KG
+          <div className="flex items-center gap-3">
+            <div className="grid size-9 place-items-center rounded-full border border-border bg-secondary text-[13px] font-semibold text-secondary-foreground">
+              {initials}
+            </div>
+            <Button variant="ghost" size="sm" onClick={onLogout}>
+              Déconnexion
+            </Button>
           </div>
         </div>
       </header>
@@ -158,7 +185,7 @@ export default function Home() {
               Mardi 19 juin · Francfort · ET₀ 4.1 mm
             </p>
             <h1 className="mt-3.5 font-heading text-4xl font-medium leading-[1.05] md:text-5xl">
-              Bonjour Kylian.
+              Bonjour {name}.
               <br />
               <span className="text-overdue">Trois plantes</span> ont soif aujourd&apos;hui.
             </h1>
