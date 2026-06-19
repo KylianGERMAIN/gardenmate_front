@@ -1,134 +1,75 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { getCarePlan, waterAll, ApiError, type CareRecommendation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { StatusBadge, type CareStatus } from "@/components/status-badge";
+import { StatusBadge } from "@/components/status-badge";
 import { ThirstGauge } from "@/components/thirst-gauge";
 
-type Plant = {
-  name: string;
-  latin: string;
-  status: CareStatus;
-  percent: number;
-  since: string;
-  next: string;
-  readings: { k: string; v: string }[];
-};
+const DAY = 86_400_000;
 
-const NEEDS_WATER: Plant[] = [
-  {
-    name: "Figuier lyre",
-    latin: "Ficus lyrata",
-    status: "OVERDUE",
-    percent: 100,
-    since: "arrosé il y a 6 j",
-    next: "2 j de retard",
-    readings: [
-      { k: "expo", v: "plein soleil" },
-      { k: "cycle", v: "4 j" },
-      { k: "ET₀", v: "4.1 mm" },
-    ],
-  },
-  {
-    name: "Monstera",
-    latin: "Monstera deliciosa",
-    status: "OVERDUE",
-    percent: 100,
-    since: "arrosé il y a 8 j",
-    next: "1 j de retard",
-    readings: [
-      { k: "expo", v: "mi-ombre" },
-      { k: "cycle", v: "7 j" },
-      { k: "ET₀", v: "4.1 mm" },
-    ],
-  },
-  {
-    name: "Calathea",
-    latin: "Calathea orbifolia",
-    status: "SOON",
-    percent: 82,
-    since: "arrosé il y a 4 j",
-    next: "à arroser demain",
-    readings: [
-      { k: "expo", v: "ombre" },
-      { k: "cycle", v: "5 j" },
-    ],
-  },
-];
+function describeNext(c: CareRecommendation, now: number): string {
+  if (c.status === "NO_SCHEDULE" || !c.nextWateringDate) return "définir un cycle";
+  const days = Math.round((new Date(c.nextWateringDate).getTime() - now) / DAY);
+  if (days < 0) return `${-days} j de retard`;
+  if (days === 0) return "à arroser aujourd'hui";
+  if (days === 1) return "à arroser demain";
+  return `prochain dans ${days} j`;
+}
 
-const HEALTHY: Plant[] = [
-  {
-    name: "Pothos",
-    latin: "Epipremnum aureum",
-    status: "OK",
-    percent: 38,
-    since: "arrosé il y a 3 j",
-    next: "prochain dans 4 j",
-    readings: [
-      { k: "expo", v: "mi-ombre" },
-      { k: "cycle", v: "9 j" },
-    ],
-  },
-  {
-    name: "Langue de belle-mère",
-    latin: "Sansevieria trifasciata",
-    status: "OK",
-    percent: 16,
-    since: "arrosé il y a 3 j",
-    next: "prochain dans 12 j",
-    readings: [
-      { k: "expo", v: "plein soleil" },
-      { k: "cycle", v: "20 j" },
-    ],
-  },
-  {
-    name: "Basilic",
-    latin: "Ocimum basilicum",
-    status: "NO_SCHEDULE",
-    percent: 0,
-    since: "aucune fréquence renseignée",
-    next: "définir un cycle",
-    readings: [{ k: "expo", v: "plein soleil" }],
-  },
-];
+function gaugePercent(c: CareRecommendation, now: number): number {
+  if (c.status === "OVERDUE") return 100;
+  if (c.status === "NO_SCHEDULE" || !c.nextWateringDate || !c.adjustedIntervalDays) return 0;
+  const days = (new Date(c.nextWateringDate).getTime() - now) / DAY;
+  const elapsed = c.adjustedIntervalDays - days;
+  return Math.max(4, Math.min(100, (elapsed / c.adjustedIntervalDays) * 100));
+}
 
-function PlantCard({ plant }: { plant: Plant }) {
+function PlantCard({ c, now }: { c: CareRecommendation; now: number }) {
   return (
     <article
       className={`rounded-2xl border bg-card p-5 ${
-        plant.status === "OVERDUE" ? "border-overdue/30" : "border-border"
+        c.status === "OVERDUE" ? "border-overdue/30" : "border-border"
       }`}
     >
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="font-heading text-lg font-medium leading-tight">{plant.name}</h3>
-          <p className="font-heading text-sm italic text-muted-foreground">{plant.latin}</p>
-        </div>
-        <StatusBadge status={plant.status} />
+        <h3 className="font-heading text-lg font-medium leading-tight">{c.plantName}</h3>
+        <StatusBadge status={c.status} />
       </div>
 
       <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 font-mono text-[12px] text-muted-foreground">
-        {plant.readings.map((r) => (
-          <span key={r.k}>
-            <span className="text-foreground/40">{r.k}</span> {r.v}
+        {c.adjustedIntervalDays ? (
+          <span>
+            <span className="text-foreground/40">cycle</span> {c.adjustedIntervalDays} j
           </span>
-        ))}
+        ) : null}
+        <span>
+          <span className="text-foreground/40">besoin</span>{" "}
+          {c.factors.source === "weather" ? "météo réelle" : "saison"}
+        </span>
       </div>
 
       <div className="mt-4">
-        <ThirstGauge status={plant.status} percent={plant.percent} left={plant.since} right={plant.next} />
+        <ThirstGauge
+          status={c.status}
+          percent={gaugePercent(c, now)}
+          left={c.factors.source === "weather" ? "ajusté météo" : "ajusté saison"}
+          right={describeNext(c, now)}
+        />
       </div>
     </article>
   );
 }
 
-function GroupHead({ title, count }: { title: string; count: string }) {
+function GroupHead({ title, count }: { title: string; count: number }) {
   return (
     <div className="mb-3.5 flex items-baseline gap-3">
       <h2 className="text-[15px] font-semibold">{title}</h2>
-      <span className="font-mono text-xs text-muted-foreground">{count}</span>
+      <span className="font-mono text-xs text-muted-foreground">
+        {String(count).padStart(2, "0")}
+      </span>
       <span className="h-px flex-1 bg-border" />
     </div>
   );
@@ -138,19 +79,70 @@ export default function Home() {
   const { user, ready, logout } = useAuth();
   const router = useRouter();
 
+  const [plans, setPlans] = useState<CareRecommendation[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [watering, setWatering] = useState(false);
+
   useEffect(() => {
     if (ready && !user) router.replace("/login");
   }, [ready, user, router]);
 
+  const load = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      setPlans(await getCarePlan(user.id));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Impossible de charger ton jardin");
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) void load();
+  }, [user, load]);
+
   if (!user) return null;
 
+  const now = Date.now();
+  const all = plans ?? [];
+  const needsWater = all.filter((c) => c.status === "OVERDUE" || c.status === "SOON");
+  const healthy = all.filter((c) => c.status === "OK" || c.status === "NO_SCHEDULE");
+  const overdue = all.filter((c) => c.status === "OVERDUE").length;
+  const soon = all.filter((c) => c.status === "SOON").length;
+  const ok = all.filter((c) => c.status === "OK").length;
   const name = user.email.split("@")[0];
-  const initials = user.email.slice(0, 2).toUpperCase();
+
+  async function onWaterAll() {
+    if (!user) return;
+    setWatering(true);
+    try {
+      await waterAll(user.id);
+      await load();
+    } catch {
+      /* l'erreur de rechargement est gérée par load() */
+    } finally {
+      setWatering(false);
+    }
+  }
 
   async function onLogout() {
     await logout();
     router.replace("/login");
   }
+
+  const subtitle = loading
+    ? "On récupère ton jardin…"
+    : overdue > 0
+      ? `${overdue} plante${overdue > 1 ? "s ont" : " a"} soif aujourd'hui.`
+      : soon > 0
+        ? `${soon} plante${soon > 1 ? "s" : ""} à arroser bientôt.`
+        : all.length > 0
+          ? "Tout est au vert. Rien à arroser."
+          : "Ton jardin est encore vide.";
 
   return (
     <>
@@ -162,14 +154,9 @@ export default function Home() {
             </span>
             GardenMate
           </div>
-          <nav className="hidden gap-6 text-sm text-muted-foreground sm:flex">
-            <span className="font-semibold text-foreground">Mon jardin</span>
-            <span>Catalogue</span>
-            <span>Rappels</span>
-          </nav>
           <div className="flex items-center gap-3">
             <div className="grid size-9 place-items-center rounded-full border border-border bg-secondary text-[13px] font-semibold text-secondary-foreground">
-              {initials}
+              {user.email.slice(0, 2).toUpperCase()}
             </div>
             <Button variant="ghost" size="sm" onClick={onLogout}>
               Déconnexion
@@ -182,23 +169,19 @@ export default function Home() {
         <section className="grid items-end gap-10 pt-14 pb-7 md:grid-cols-[1.4fr_1fr]">
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground">
-              Mardi 19 juin · Francfort · ET₀ 4.1 mm
+              Ton jardin · aujourd&apos;hui
             </p>
             <h1 className="mt-3.5 font-heading text-4xl font-medium leading-[1.05] md:text-5xl">
               Bonjour {name}.
               <br />
-              <span className="text-overdue">Trois plantes</span> ont soif aujourd&apos;hui.
+              <span className={overdue > 0 ? "text-overdue" : "text-ok"}>{subtitle}</span>
             </h1>
-            <p className="mt-4 max-w-[42ch] text-muted-foreground">
-              La météo du jour pousse l&apos;évaporation : tes plantes au soleil avancent plus vite
-              que d&apos;habitude. Voici l&apos;ordre des priorités.
-            </p>
           </div>
           <div className="flex gap-2.5">
             {[
-              { n: "3", l: "en retard", c: "text-overdue" },
-              { n: "1", l: "bientôt", c: "text-soon" },
-              { n: "6", l: "ça va", c: "text-ok" },
+              { n: overdue, l: "en retard", c: "text-overdue" },
+              { n: soon, l: "bientôt", c: "text-soon" },
+              { n: ok, l: "ça va", c: "text-ok" },
             ].map((s) => (
               <div key={s.l} className="flex-1 rounded-xl border border-border bg-card p-4">
                 <b className={`block font-mono text-2xl leading-none ${s.c}`}>{s.n}</b>
@@ -209,27 +192,61 @@ export default function Home() {
         </section>
 
         <div className="flex gap-2.5">
-          <Button>💧 Tout arroser</Button>
-          <Button variant="outline">Ajouter une plante</Button>
+          <Button onClick={onWaterAll} disabled={watering || needsWater.length === 0}>
+            {watering ? "Arrosage…" : "💧 Tout arroser"}
+          </Button>
+          <Button variant="outline" disabled>
+            Ajouter une plante
+          </Button>
         </div>
 
-        <section className="mt-9">
-          <GroupHead title="À arroser" count="03" />
-          <div className="grid gap-3">
-            {NEEDS_WATER.map((p) => (
-              <PlantCard key={p.latin} plant={p} />
-            ))}
+        {loading ? (
+          <div className="mt-10 grid place-items-center gap-2 rounded-2xl border border-dashed border-border bg-card/50 py-16 text-center">
+            <p className="text-sm text-muted-foreground">On récupère ton jardin…</p>
+            <p className="font-mono text-[11px] text-muted-foreground">
+              le serveur gratuit peut mettre ~30 s à se réveiller
+            </p>
           </div>
-        </section>
+        ) : error ? (
+          <div className="mt-10 grid place-items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 py-16 text-center">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button variant="outline" size="sm" onClick={() => void load()}>
+              Réessayer
+            </Button>
+          </div>
+        ) : all.length === 0 ? (
+          <div className="mt-10 grid place-items-center gap-2 rounded-2xl border border-dashed border-border bg-card/50 py-16 text-center">
+            <p className="font-heading text-xl">Ton jardin t&apos;attend 🌱</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Ajoute ta première plante pour suivre quand elle a besoin d&apos;eau. (Bientôt
+              disponible — on branche le catalogue à la prochaine étape.)
+            </p>
+          </div>
+        ) : (
+          <>
+            {needsWater.length > 0 ? (
+              <section className="mt-9">
+                <GroupHead title="À arroser" count={needsWater.length} />
+                <div className="grid gap-3">
+                  {needsWater.map((c) => (
+                    <PlantCard key={c.userPlantId} c={c} now={now} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-        <section className="mt-9">
-          <GroupHead title="Ça va" count="06" />
-          <div className="grid gap-3">
-            {HEALTHY.map((p) => (
-              <PlantCard key={p.latin} plant={p} />
-            ))}
-          </div>
-        </section>
+            {healthy.length > 0 ? (
+              <section className="mt-9">
+                <GroupHead title="Ça va" count={healthy.length} />
+                <div className="grid gap-3">
+                  {healthy.map((c) => (
+                    <PlantCard key={c.userPlantId} c={c} now={now} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </>
+        )}
       </main>
     </>
   );
