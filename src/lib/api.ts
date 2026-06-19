@@ -27,6 +27,18 @@ export type AuthResponse = {
   user: User;
 };
 
+export type CareStatus = "OVERDUE" | "SOON" | "OK" | "NO_SCHEDULE";
+
+export type CareRecommendation = {
+  userPlantId: string;
+  plantId: string;
+  plantName: string;
+  status: CareStatus;
+  nextWateringDate: string | null;
+  adjustedIntervalDays: number | null;
+  factors: { demand: number; exposure: number; source: "weather" | "season" };
+};
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -133,6 +145,16 @@ export function login(email: string, password: string): Promise<User> {
 
 export function register(email: string, password: string): Promise<User> {
   return authRequest("/auth/register", email, password);
+}
+
+/* ── Jardin / care-plan ──────────────────────────────────── */
+
+export function getCarePlan(userId: string): Promise<CareRecommendation[]> {
+  return apiFetch<CareRecommendation[]>(`/users/${userId}/plants/care-plan`);
+}
+
+export function waterAll(userId: string): Promise<unknown> {
+  return apiFetch(`/users/${userId}/plants/water-all`, { method: "POST" });
 }
 
 export async function logout(): Promise<void> {

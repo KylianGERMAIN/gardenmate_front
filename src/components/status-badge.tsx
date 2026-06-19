@@ -1,4 +1,6 @@
-export type CareStatus = "OVERDUE" | "SOON" | "OK" | "NO_SCHEDULE";
+import type { CareStatus } from "@/lib/api";
+
+export type { CareStatus };
 
 const STATUS: Record<CareStatus, { label: string; cls: string }> = {
   OVERDUE: { label: "En retard", cls: "bg-overdue/12 text-overdue border-overdue/30" },
