@@ -82,7 +82,19 @@ export function clearTokens(): void {
 
 /* ── Refresh (rotation) ──────────────────────────────────── */
 
-async function tryRefresh(): Promise<boolean> {
+// Single-flight : si plusieurs requêtes tombent en 401 simultanément, elles
+// partagent le MÊME refresh. Sinon chacune POST /auth/refresh, la rotation
+// révoque le token dès le 1er appel, et les suivants échouent → logout subi.
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  refreshInFlight ??= doRefresh().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<boolean> {
   const refreshToken = getRefresh();
   if (!refreshToken) return false;
 
