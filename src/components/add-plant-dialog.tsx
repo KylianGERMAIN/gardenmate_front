@@ -90,6 +90,7 @@ export function AddPlantDialog({
           <input
             type="search"
             autoFocus
+            aria-label="Rechercher une espèce"
             placeholder="Rechercher une espèce…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

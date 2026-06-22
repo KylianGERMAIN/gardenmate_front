@@ -34,7 +34,10 @@ export default function LoginPage() {
     <main className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center gap-2.5 font-heading text-2xl">
-          <span className="grid size-8 place-items-center rounded-[10px] bg-verdant text-base text-[#eaf3ec]">
+          <span
+            aria-hidden="true"
+            className="grid size-8 place-items-center rounded-[10px] bg-verdant text-base text-[#eaf3ec]"
+          >
             ❧
           </span>
           GardenMate

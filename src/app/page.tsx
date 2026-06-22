@@ -256,13 +256,19 @@ export default function Home() {
       <header className="sticky top-0 z-10 border-b border-border bg-background/70 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
           <div className="flex items-center gap-2.5 font-heading text-xl">
-            <span className="grid size-7 place-items-center rounded-[9px] bg-verdant text-[15px] text-[#eaf3ec]">
+            <span
+              aria-hidden="true"
+              className="grid size-7 place-items-center rounded-[9px] bg-verdant text-[15px] text-[#eaf3ec]"
+            >
               ❧
             </span>
             GardenMate
           </div>
           <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-full border border-border bg-secondary text-[13px] font-semibold text-secondary-foreground">
+            <div
+              aria-hidden="true"
+              className="grid size-9 place-items-center rounded-full border border-border bg-secondary text-[13px] font-semibold text-secondary-foreground"
+            >
               {user.email.slice(0, 2).toUpperCase()}
             </div>
             <Button variant="ghost" size="sm" onClick={onLogout}>
