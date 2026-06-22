@@ -3,15 +3,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { getCarePlan, waterAll, ApiError, type CareRecommendation } from "@/lib/api";
+import {
+  getCarePlan,
+  waterAll,
+  waterPlant,
+  removePlant,
+  ApiError,
+  type CareRecommendation,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { ThirstGauge } from "@/components/thirst-gauge";
+import { AddPlantDialog } from "@/components/add-plant-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const DAY = 86_400_000;
 
 function describeNext(c: CareRecommendation, now: number): string {
-  if (c.status === "NO_SCHEDULE" || !c.nextWateringDate) return "définir un cycle";
+  if (c.status === "NO_SCHEDULE" || !c.nextWateringDate) return "cycle non défini";
   const days = Math.round((new Date(c.nextWateringDate).getTime() - now) / DAY);
   if (days < 0) return `${-days} j de retard`;
   if (days === 0) return "à arroser aujourd'hui";
@@ -27,7 +36,39 @@ function gaugePercent(c: CareRecommendation, now: number): number {
   return Math.max(4, Math.min(100, (elapsed / c.adjustedIntervalDays) * 100));
 }
 
-function PlantCard({ c, now }: { c: CareRecommendation; now: number }) {
+function PlantCard({
+  c,
+  now,
+  onWater,
+  onDelete,
+}: {
+  c: CareRecommendation;
+  now: number;
+  onWater: (userPlantId: string) => Promise<void>;
+  onDelete: (userPlantId: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<null | "water" | "delete">(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  async function water() {
+    setBusy("water");
+    try {
+      await onWater(c.userPlantId);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function confirmRemove() {
+    setBusy("delete");
+    try {
+      await onDelete(c.userPlantId);
+      setConfirmOpen(false);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <article
       className={`rounded-2xl border bg-card p-5 ${
@@ -59,6 +100,31 @@ function PlantCard({ c, now }: { c: CareRecommendation; now: number }) {
           right={describeNext(c, now)}
         />
       </div>
+
+      <div className="mt-4 flex gap-2">
+        <Button size="sm" variant="outline" onClick={water} disabled={busy !== null}>
+          {busy === "water" ? "Arrosage…" : "💧 Arroser"}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setConfirmOpen(true)}
+          disabled={busy !== null}
+          className="text-muted-foreground"
+        >
+          {busy === "delete" ? "Suppression…" : "Retirer"}
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Retirer ${c.plantName} ?`}
+        message="Cette plante sera retirée de ton jardin."
+        confirmLabel="Retirer"
+        busy={busy === "delete"}
+        onConfirm={confirmRemove}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </article>
   );
 }
@@ -83,6 +149,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [watering, setWatering] = useState(false);
+  // Figé au montage : un dashboard est un instantané (rafraîchi via load() sur action).
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     if (ready && !user) router.replace("/login");
@@ -101,13 +169,30 @@ export default function Home() {
     }
   }, [user]);
 
+  // Fetch initial au montage : tous les setState sont dans les callbacks async
+  // (pas dans le corps synchrone de l'effet) pour éviter les renders en cascade.
+  // load() ci-dessus sert aux refetch manuels (retry / après action).
   useEffect(() => {
-    if (user) void load();
-  }, [user, load]);
+    if (!user) return;
+    let cancelled = false;
+    getCarePlan(user.id)
+      .then((p) => {
+        if (!cancelled) setPlans(p);
+      })
+      .catch((e) => {
+        if (!cancelled)
+          setError(e instanceof ApiError ? e.message : "Impossible de charger ton jardin");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   if (!user) return null;
 
-  const now = Date.now();
   const all = plans ?? [];
   const needsWater = all.filter((c) => c.status === "OVERDUE" || c.status === "SOON");
   const healthy = all.filter((c) => c.status === "OK" || c.status === "NO_SCHEDULE");
@@ -126,6 +211,28 @@ export default function Home() {
       /* l'erreur de rechargement est gérée par load() */
     } finally {
       setWatering(false);
+    }
+  }
+
+  async function onWaterOne(userPlantId: string) {
+    if (!user) return;
+    setError(null);
+    try {
+      await waterPlant(user.id, userPlantId);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Arrosage impossible");
+    }
+  }
+
+  async function onDeleteOne(userPlantId: string) {
+    if (!user) return;
+    setError(null);
+    try {
+      await removePlant(user.id, userPlantId);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Suppression impossible");
     }
   }
 
@@ -195,9 +302,7 @@ export default function Home() {
           <Button onClick={onWaterAll} disabled={watering || needsWater.length === 0}>
             {watering ? "Arrosage…" : "💧 Tout arroser"}
           </Button>
-          <Button variant="outline" disabled>
-            Ajouter une plante
-          </Button>
+          <AddPlantDialog userId={user.id} onAdded={() => void load()} />
         </div>
 
         {loading ? (
@@ -218,8 +323,8 @@ export default function Home() {
           <div className="mt-10 grid place-items-center gap-2 rounded-2xl border border-dashed border-border bg-card/50 py-16 text-center">
             <p className="font-heading text-xl">Ton jardin t&apos;attend 🌱</p>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Ajoute ta première plante pour suivre quand elle a besoin d&apos;eau. (Bientôt
-              disponible — on branche le catalogue à la prochaine étape.)
+              Ajoute ta première plante avec le bouton « Ajouter une plante » ci-dessus pour
+              suivre quand elle a besoin d&apos;eau.
             </p>
           </div>
         ) : (
@@ -229,7 +334,13 @@ export default function Home() {
                 <GroupHead title="À arroser" count={needsWater.length} />
                 <div className="grid gap-3">
                   {needsWater.map((c) => (
-                    <PlantCard key={c.userPlantId} c={c} now={now} />
+                    <PlantCard
+                      key={c.userPlantId}
+                      c={c}
+                      now={now}
+                      onWater={onWaterOne}
+                      onDelete={onDeleteOne}
+                    />
                   ))}
                 </div>
               </section>
@@ -240,7 +351,13 @@ export default function Home() {
                 <GroupHead title="Ça va" count={healthy.length} />
                 <div className="grid gap-3">
                   {healthy.map((c) => (
-                    <PlantCard key={c.userPlantId} c={c} now={now} />
+                    <PlantCard
+                      key={c.userPlantId}
+                      c={c}
+                      now={now}
+                      onWater={onWaterOne}
+                      onDelete={onDeleteOne}
+                    />
                   ))}
                 </div>
               </section>

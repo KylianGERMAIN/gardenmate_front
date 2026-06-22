@@ -27,6 +27,15 @@ export type AuthResponse = {
   user: User;
 };
 
+export type SunlightLevel = "FULL_SUN" | "PARTIAL_SHADE" | "SHADE";
+
+export type Plant = {
+  id: string;
+  name: string;
+  sunlightLevel: SunlightLevel;
+  wateringFrequency: number | null;
+};
+
 export type CareStatus = "OVERDUE" | "SOON" | "OK" | "NO_SCHEDULE";
 
 export type CareRecommendation = {
@@ -155,6 +164,36 @@ export function getCarePlan(userId: string): Promise<CareRecommendation[]> {
 
 export function waterAll(userId: string): Promise<unknown> {
   return apiFetch(`/users/${userId}/plants/water-all`, { method: "POST" });
+}
+
+/* ── Catalogue ───────────────────────────────────────────── */
+
+type Paginated<T> = { items: T[] };
+
+// ponytail: on ne renvoie que les items (20 premiers), pagination ajoutée si le catalogue grossit
+export async function getPlants(name?: string): Promise<Plant[]> {
+  const q = name ? `?name=${encodeURIComponent(name)}` : "";
+  const { items } = await apiFetch<Paginated<Plant>>(`/plants${q}`);
+  return items;
+}
+
+export function addPlant(userId: string, plantId: string): Promise<unknown> {
+  return apiFetch(`/users/${userId}/plants`, {
+    method: "POST",
+    body: JSON.stringify({ plantId }),
+  });
+}
+
+// Pas d'endpoint d'arrosage unitaire côté API : on PATCH lastWateredAt = maintenant.
+export function waterPlant(userId: string, userPlantId: string): Promise<unknown> {
+  return apiFetch(`/users/${userId}/plants/${userPlantId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ lastWateredAt: new Date().toISOString() }),
+  });
+}
+
+export function removePlant(userId: string, userPlantId: string): Promise<unknown> {
+  return apiFetch(`/users/${userId}/plants/${userPlantId}`, { method: "DELETE" });
 }
 
 export async function logout(): Promise<void> {
