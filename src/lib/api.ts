@@ -182,7 +182,6 @@ export function waterAll(userId: string): Promise<unknown> {
 
 type Paginated<T> = { items: T[] };
 
-// ponytail: on ne renvoie que les items (20 premiers), pagination ajoutée si le catalogue grossit
 export async function getPlants(name?: string): Promise<Plant[]> {
   const q = name ? `?name=${encodeURIComponent(name)}` : "";
   const { items } = await apiFetch<Paginated<Plant>>(`/plants${q}`);

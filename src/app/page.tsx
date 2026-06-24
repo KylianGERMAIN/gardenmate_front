@@ -103,7 +103,7 @@ function PlantCard({
 
       <div className="mt-4 flex gap-2">
         <Button size="sm" variant="outline" onClick={water} disabled={busy !== null}>
-          {busy === "water" ? "Arrosage…" : "💧 Arroser"}
+          {busy === "water" ? "Arrosage…" : "Arroser"}
         </Button>
         <Button
           size="sm"
@@ -306,7 +306,7 @@ export default function Home() {
 
         <div className="flex gap-2.5">
           <Button onClick={onWaterAll} disabled={watering || needsWater.length === 0}>
-            {watering ? "Arrosage…" : "💧 Tout arroser"}
+            {watering ? "Arrosage…" : "Tout arroser"}
           </Button>
           <AddPlantDialog userId={user.id} onAdded={() => void load()} />
         </div>
@@ -327,7 +327,7 @@ export default function Home() {
           </div>
         ) : all.length === 0 ? (
           <div className="mt-10 grid place-items-center gap-2 rounded-2xl border border-dashed border-border bg-card/50 py-16 text-center">
-            <p className="font-heading text-xl">Ton jardin t&apos;attend 🌱</p>
+            <p className="font-heading text-xl">Ton jardin t&apos;attend</p>
             <p className="max-w-sm text-sm text-muted-foreground">
               Ajoute ta première plante avec le bouton « Ajouter une plante » ci-dessus pour
               suivre quand elle a besoin d&apos;eau.
